@@ -1,0 +1,18 @@
+{
+  "package": "com.example.starcatcher",
+  "name": "奇幻接星星",
+  "versionName": "1.0.0",
+  "versionCode": 1,
+  "minPlatformVersion": 1050,
+  "icon": "/common/icon.png",
+  "orientation": "portrait",
+  "type": "game",
+  "config": {
+    "logLevel": "log"
+  },
+  "display": {
+    "statusbar": "none",
+    "titleBar": false,
+    "menuBar": false
+  }
+}

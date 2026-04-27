@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>奇幻接星星游戏</title>
+    <!-- vivo 小游戏必须引入这个库 -->
+    <script src="./libs/adapter.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            touch-action: none;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Arial Rounded MT Bold', 'Arial', sans-serif;
+            background: linear-gradient(135deg, #0c0c2e 0%, #1a1a4a 50%, #2d2d6e 100%);
+            color: #fff;
+        }
+        
+        #gameCanvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at center, #0a0a1a 0%, #000000 100%);
+        }
+        
+        /* 游戏界面覆盖层 */
+        .game-ui {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 100;
+        }
+        
+        .ui-element {
+            pointer-events: auto;
+        }
+        
+        .game-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 200;
+        }
+        
+        .menu, .game-over {
+            text-align: center;
+            padding: 30px;
+            border-radius: 20px;
+            background: rgba(25, 25, 60, 0.95);
+            border: 2px solid #4a4aff;
+            box-shadow: 0 0 40px rgba(74, 74, 255, 0.4);
+            max-width: 90%;
+            width: 400px;
+        }
+        
+        h1 {
+            color: #ffd700;
+            font-size: 2.2em;
+            margin-bottom: 20px;
+            text-shadow: 0 0 10px #ffd700;
+            background: linear-gradient(45deg, #ffd700, #ffed4e);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        /* 其他样式保持不变，只是移除 body 的 flex 布局 */
+        .game-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        
+        /* 为 vivo 小游戏优化按钮大小 */
+        .difficulty-btn, .start-btn, .restart-btn {
+            min-height: 50px;
+            font-size: 1.1em;
+        }
+        
+        /* 响应式调整 */
+        @media (max-width: 768px) {
+            h1 { font-size: 1.8em; }
+            .menu, .game-over { padding: 20px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <canvas id="gameCanvas"></canvas>
+        
+        <!-- 游戏UI元素 -->
+        <div class="game-ui">
+            <div class="game-info" style="display: none; position: absolute; top: 20px; left: 20px; right: 20px; justify-content: space-between; z-index: 5; font-size: 1.1em;">
+                <div class="score" style="background: rgba(0,0,0,0.5); padding: 8px 15px; border-radius: 10px;">得分: <span id="scoreValue">0</span></div>
+                <div class="lives" style="background: rgba(0,0,0,0.5); padding: 8px 15px; border-radius: 10px;">生命: <span id="livesValue">3</span></div>
+            </div>
+            
+            <div class="touch-indicator" id="touchIndicator" style="position: absolute; bottom: 30px; left: 0; right: 0; text-align: center; color: rgba(255,255,255,0.7); font-size: 1.1em; display: none;">
+                ← 滑动屏幕控制 →
+            </div>
+        </div>
+        
+        <!-- 开始菜单 -->
+        <div class="game-overlay" id="menuOverlay">
+            <div class="menu ui-element">
+                <h1>✨ 奇幻接星星 ✨</h1>
+                <h2 style="color: #a3d9ff; margin-bottom: 15px;">选择难度</h2>
+                
+                <div class="difficulty-selector" style="display: flex; flex-direction: column; gap: 10px; margin: 20px 0;">
+                    <button class="difficulty-btn easy active" data-speed="2" data-score="1" style="padding: 12px 20px; border: none; border-radius: 12px; background: linear-gradient(135deg, #4CAF50, #8BC34A); color: white; cursor: pointer;">简单 - 慢速下落</button>
+                    <button class="difficulty-btn medium" data-speed="3" data-score="2" style="padding: 12px 20px; border: none; border-radius: 12px; background: linear-gradient(135deg, #2196F3, #03A9F4); color: white; cursor: pointer;">中等 - 正常速度</button>
+                    <button class="difficulty-btn hard" data-speed="5" data-score="3" style="padding: 12px 20px; border: none; border-radius: 12px; background: linear-gradient(135deg, #FF9800, #FF5722); color: white; cursor: pointer;">困难 - 快速下落</button>
+                </div>
+                
+                <button class="start-btn" id="startBtn" style="padding: 15px 40px; font-size: 1.2em; background: linear-gradient(135deg, #00ff88, #00ccff); color: #000; border: none; border-radius: 20px; cursor: pointer; font-weight: bold; margin-top: 20px; box-shadow: 0 4px 20px rgba(0,255,136,0.4);">开始游戏</button>
+                
+                <p class="instructions" style="margin-top: 20px; color: #a3d9ff; font-size: 0.9em; line-height: 1.4;">
+                    直接在屏幕上左右滑动控制平台<br>
+                    接住星星得分，掉落星星扣生命<br>
+                    生命值为0时游戏结束
+                </p>
+            </div>
+        </div>
+        
+        <!-- 游戏结束界面 -->
+        <div class="game-overlay" id="gameOverOverlay" style="display: none;">
+            <div class="game-over ui-element">
+                <h1>游戏结束</h1>
+                <h2 style="color: #a3d9ff; margin: 20px 0;">最终得分: <span id="finalScore">0</span></h2>
+                <button class="restart-btn" id="restartBtn" style="padding: 15px 40px; font-size: 1.2em; background: linear-gradient(135deg, #00ff88, #00ccff); color: #000; border: none; border-radius: 20px; cursor: pointer; font-weight: bold;">重新开始</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 游戏脚本（基本保持原样，但需要调整一些 DOM 操作） -->
+    <script>
+        // 游戏配置
+        const config = {
+            canvas: null,
+            ctx: null,
+            platform: {
+                width: 100,
+                height: 20,
+                x: 0,
+                y: 0,
+                speed: 8,
+                color: '#00ccff',
+                targetX: 0
+            },
+            stars: [],
+            lastStarTime: 0,
+            starInterval: 1000,
+            gameActive: false,
+            score: 0,
+            lives: 3,
+            difficulty: 'easy',
+            baseSpeed: 2,
+            scoreMultiplier: 1,
+            screenWidth: 0,
+            screenHeight: 0,
+            isTouching: false,
+            touchStartX: 0
+        };
+        
+        // 星星类型
+        const starTypes = [
+            { color: '#FFD700', points: 10, radius: 15, speed: 2 },
+            { color: '#4A4AFF', points: 20, radius: 12, speed: 2.5 },
+            { color: '#FF4A4A', points: 30, radius: 18, speed: 1.8 },
+            { color: '#4AFF4A', points: 50, radius: 10, speed: 3 }
+        ];
+        
+        // 初始化游戏
+        function initGame() {
+            config.canvas = document.getElementById('gameCanvas');
+            config.ctx = config.canvas.getContext('2d');
+            
+            // 设置画布尺寸
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+            
+            // 初始化平台位置
+            config.platform.x = (config.screenWidth - config.platform.width) / 2;
+            config.platform.y = config.screenHeight - config.platform.height - 30;
+            config.platform.targetX = config.platform.x;
+            
+            // 事件监听
+            setupEventListeners();
+            
+            // 显示触摸提示
+            setTimeout(() => {
+                const indicator = document.getElementById('touchIndicator');
+                indicator.style.display = 'block';
+                indicator.style.opacity = '0.7';
+                indicator.style.transition = 'opacity 1s';
+            }, 1000);
+        }
+        
+        function resizeCanvas() {
+            const container = document.querySelector('.game-container');
+            config.screenWidth = window.innerWidth;
+            config.screenHeight = window.innerHeight;
+            
+            config.canvas.width = config.screenWidth;
+            config.canvas.height = config.screenHeight;
+            
+            if (config.gameActive) {
+                config.platform.y = config.screenHeight - config.platform.height - 30;
+            }
+        }
+        
+        function setupEventListeners() {
+            // 触摸事件
+            const canvas = config.canvas;
+            canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+            canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+            canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
+            
+            // 鼠标事件
+            canvas.addEventListener('mousedown', handleMouseDown);
+            canvas.addEventListener('mousemove', handleMouseMove);
+            canvas.addEventListener('mouseup', handleMouseUp);
+            canvas.addEventListener('mouseleave', handleMouseUp);
+            
+            // 按钮事件
+            document.getElementById('startBtn').addEventListener('click', startGame);
+            document.getElementById('restartBtn').addEventListener('click', restartGame);
+            
+            // 难度选择
+            const difficultyBtns = document.querySelectorAll('.difficulty-btn');
+            difficultyBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    difficultyBtns.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    config.difficulty = btn.classList[1];
+                    config.baseSpeed = parseInt(btn.dataset.speed);
+                    config.scoreMultiplier = parseInt(btn.dataset.score);
+                });
+            });
+            
+            // 键盘控制
+            document.addEventListener('keydown', (e) => {
+                if (config.gameActive) {
+                    if (e.key === 'ArrowLeft' || e.key === 'a') {
+                        config.platform.targetX = Math.max(0, config.platform.x - config.platform.speed);
+                        document.getElementById('touchIndicator').style.opacity = '0';
+                    }
+                    if (e.key === 'ArrowRight' || e.key === 'd') {
+                        config.platform.targetX = Math.min(config.screenWidth - config.platform.width, 
+                            config.platform.x + config.platform.speed);
+                        document.getElementById('touchIndicator').style.opacity = '0';
+                    }
+                }
+            });
+        }
+        
+        // 触摸/鼠标控制函数（保持原样）
+        function handleTouchStart(e) {
+            e.preventDefault();
+            if (!config.gameActive) return;
+            
+            config.isTouching = true;
+            const touch = e.touches[0];
+            config.touchStartX = touch.clientX;
+            config.platform.targetX = config.platform.x;
+            document.getElementById('touchIndicator').style.opacity = '0';
+        }
+        
+        function handleTouchMove(e) {
+            e.preventDefault();
+            if (!config.gameActive || !config.isTouching) return;
+            
+            const touch = e.touches[0];
+            const touchX = touch.clientX;
+            const deltaX = touchX - config.touchStartX;
+            
+            config.platform.targetX = Math.max(0, Math.min(
+                config.screenWidth - config.platform.width,
+                config.platform.x + deltaX
+            ));
+            
+            config.touchStartX = touchX;
+        }
+        
+        function handleTouchEnd(e) {
+            e.preventDefault();
+            config.isTouching = false;
+        }
+        
+        function handleMouseDown(e) {
+            if (!config.gameActive) return;
+            
+            config.isTouching = true;
+            config.touchStartX = e.clientX;
+            config.platform.targetX = config.platform.x;
+            document.getElementById('touchIndicator').style.opacity = '0';
+        }
+        
+        function handleMouseMove(e) {
+            if (!config.gameActive || !config.isTouching) return;
+            
+            const mouseX = e.clientX;
+            const deltaX = mouseX - config.touchStartX;
+            
+            config.platform.targetX = Math.max(0, Math.min(
+                config.screenWidth - config.platform.width,
+                config.platform.x + deltaX
+            ));
+            
+            config.touchStartX = mouseX;
+        }
+        
+        function handleMouseUp(e) {
+            config.isTouching = false;
+        }
+        
+        // 游戏核心函数（保持原样）
+        function startGame() {
+            config.gameActive = true;
+            config.score = 0;
+            config.lives = 3;
+            config.stars = [];
+            config.lastStarTime = Date.now();
+            
+            config.platform.x = (config.screenWidth - config.platform.width) / 2;
+            config.platform.targetX = config.platform.x;
+            
+            document.getElementById('menuOverlay').style.display = 'none';
+            document.querySelector('.game-info').style.display = 'flex';
+            document.getElementById('scoreValue').textContent = '0';
+            document.getElementById('livesValue').textContent = '3';
+            
+            gameLoop();
+        }
+        
+        function gameLoop() {
+            if (!config.gameActive) return;
+            
+            update();
+            render();
+            
+            requestAnimationFrame(gameLoop);
+        }
+        
+        function update() {
+            const currentTime = Date.now();
+            
+            // 平滑移动平台
+            if (config.gameActive) {
+                const dx = config.platform.targetX - config.platform.x;
+                config.platform.x += dx * 0.2;
+                config.platform.x = Math.max(0, Math.min(config.screenWidth - config.platform.width, config.platform.x));
+            }
+            
+            // 生成星星
+            if (currentTime - config.lastStarTime > config.starInterval) {
+                createStar();
+                config.lastStarTime = currentTime;
+            }
+            
+            // 更新星星
+            for (let i = config.stars.length - 1; i >= 0; i--) {
+                const star = config.stars[i];
+                star.y += star.speed;
+                star.rotation += star.rotationSpeed;
+                
+                // 碰撞检测
+                if (star.y + star.radius >= config.platform.y &&
+                    star.y - star.radius <= config.platform.y + config.platform.height &&
+                    star.x >= config.platform.x &&
+                    star.x <= config.platform.x + config.platform.width) {
+                    
+                    config.score += star.points * config.scoreMultiplier;
+                    document.getElementById('scoreValue').textContent = config.score;
+                    createScoreEffect(star.x, star.y, star.points * config.scoreMultiplier);
+                    config.stars.splice(i, 1);
+                    continue;
+                }
+                
+                if (star.y - star.radius > config.screenHeight) {
+                    config.lives--;
+                    document.getElementById('livesValue').textContent = config.lives;
+                    createLifeEffect(star.x, config.screenHeight);
+                    config.stars.splice(i, 1);
+                    
+                    if (config.lives <= 0) {
+                        gameOver();
+                    }
+                }
+            }
+        }
+        
+        function createStar() {
+            const starType = starTypes[Math.floor(Math.random() * starTypes.length)];
+            const star = {
+                x: Math.random() * (config.screenWidth - 40) + 20,
+                y: -starType.radius,
+                radius: starType.radius,
+                color: starType.color,
+                points: starType.points,
+                speed: starType.speed + config.baseSpeed,
+                rotation: 0,
+                rotationSpeed: (Math.random() - 0.5) * 0.1
+            };
+            config.stars.push(star);
+        }
+        
+        function render() {
+            const ctx = config.ctx;
+            
+            // 清空画布
+            ctx.clearRect(0, 0, config.screenWidth, config.screenHeight);
+            
+            // 绘制背景
+            drawBackground();
+            
+            // 绘制平台
+            drawPlatform();
+            
+            // 绘制星星
+            config.stars.forEach(star => {
+                drawStar(star);
+            });
+        }
+        
+        function drawBackground() {
+            const ctx = config.ctx;
+            const gradient = ctx.createRadialGradient(
+                config.screenWidth / 2, config.screenHeight / 2, 0,
+                config.screenWidth / 2, config.screenHeight / 2, Math.max(config.screenWidth, config.screenHeight) / 2
+            );
+            gradient.addColorStop(0, 'rgba(10, 10, 30, 0.1)');
+            gradient.addColorStop(1, 'rgba(0, 0, 0, 0.5)');
+            
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, config.screenWidth, config.screenHeight);
+        }
+        
+        function drawPlatform() {
+            const ctx = config.ctx;
+            const p = config.platform;
+            
+            // 阴影
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+            ctx.fillRect(p.x, p.y + 5, p.width, p.height);
+            
+            // 主体
+            ctx.fillStyle = p.color;
+            ctx.fillRect(p.x, p.y, p.width, p.height);
+            
+            // 高光
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.fillRect(p.x, p.y, p.width, 5);
+            
+            // 边框
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(p.x, p.y, p.width, p.height);
+        }
+        
+        function drawStar(star) {
+            const ctx = config.ctx;
+            
+            ctx.save();
+            ctx.translate(star.x, star.y);
+            ctx.rotate(star.rotation);
+            
+            // 绘制五角星
+            ctx.fillStyle = star.color;
+            ctx.beginPath();
+            
+            const spikes = 5;
+            const outerRadius = star.radius;
+            const innerRadius = star.radius * 0.5;
+            
+            for (let i = 0; i < spikes * 2; i++) {
+                const radius = i % 2 === 0 ? outerRadius : innerRadius;
+                const angle = (Math.PI * i) / spikes;
+                
+                if (i === 0) {
+                    ctx.moveTo(radius * Math.sin(angle), -radius * Math.cos(angle));
+                } else {
+                    ctx.lineTo(radius * Math.sin(angle), -radius * Math.cos(angle));
+                }
+            }
+            
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+            
+            // 发光效果
+            ctx.shadowColor = star.color;
+            ctx.shadowBlur = 15;
+            ctx.fillStyle = star.color;
+            ctx.beginPath();
+            ctx.arc(star.x, star.y, star.radius * 0.3, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+        }
+        
+        function createScoreEffect(x, y, points) {
+            const effect = {
+                x: x, y: y, text: `+${points}`, color: '#00ff00', alpha: 1, vy: -2, life: 60
+            };
+            
+            const draw = () => {
+                if (effect.life <= 0) return;
+                
+                const ctx = config.ctx;
+                ctx.save();
+                ctx.globalAlpha = effect.alpha;
+                ctx.fillStyle = effect.color;
+                ctx.font = 'bold 24px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(effect.text, effect.x, effect.y);
+                ctx.restore();
+                
+                effect.y += effect.vy;
+                effect.alpha -= 0.02;
+                effect.life--;
+                
+                requestAnimationFrame(draw);
+            };
+            
+            draw();
+        }
+        
+        function createLifeEffect(x, y) {
+            const effect = {
+                x: x, y: y, text: '-1❤️', color: '#ff0000', alpha: 1, vy: -2, life: 60
+            };
+            
+            const draw = () => {
+                if (effect.life <= 0) return;
+                
+                const ctx = config.ctx;
+                ctx.save();
+                ctx.globalAlpha = effect.alpha;
+                ctx.fillStyle = effect.color;
+                ctx.font = 'bold 24px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(effect.text, effect.x, effect.y);
+                ctx.restore();
+                
+                effect.y += effect.vy;
+                effect.alpha -= 0.02;
+                effect.life--;
+                
+                requestAnimationFrame(draw);
+            };
+            
+            draw();
+        }
+        
+        function gameOver() {
+            config.gameActive = false;
+            document.getElementById('finalScore').textContent = config.score;
+            document.getElementById('gameOverOverlay').style.display = 'flex';
+            document.querySelector('.game-info').style.display = 'none';
+            document.getElementById('touchIndicator').style.display = 'none';
+        }
+        
+        function restartGame() {
+            document.getElementById('gameOverOverlay').style.display = 'none';
+            startGame();
+        }
+        
+        // 初始化游戏
+        window.onload = initGame;
+    </script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "outputPath": "./dist",
+  "minify": true,
+  "uglify": false,
+  "obfuscate": false,
+  "autoCompile": true,
+  "compileInclude": ["*.js", "*.html"],
+  "compileExclude": ["libs/**/*", "common/**/*"],
+  "assetsInclude": ["common/**/*", "libs/**/*"],
+  "assetsExclude": ["common/*.psd", "libs/*.map"]
+}

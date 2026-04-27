@@ -1,0 +1,15 @@
+{
+  "name": "starcatcher-vivo-minigame",
+  "version": "1.0.0",
+  "description": "奇幻接星星 - vivo 小游戏",
+  "main": "game.html",
+  "scripts": {
+    "dev": "python3 -m http.server 8080",
+    "build": "node build.js",
+    "create-icon": "node create-icon.js",
+    "download-adapter": "node download-adapter.js"
+  },
+  "keywords": ["game", "vivo", "minigame", "html5"],
+  "author": "Your Name",
+  "license": "MIT"
+}
